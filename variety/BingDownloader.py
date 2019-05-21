@@ -18,6 +18,7 @@ import logging
 from datetime import datetime
 from variety import Downloader
 from variety.Util import Util
+from urllib.parse import urlparse, parse_qs
 
 logger = logging.getLogger('variety')
 
@@ -44,8 +45,8 @@ class BingDownloader(Downloader.Downloader):
             logger.info(lambda: "Bing queue empty after fill")
             return None
 
-        origin_url, image_url, extra_metadata = self.queue.pop()
-        return self.save_locally(origin_url, image_url, extra_metadata=extra_metadata)
+        origin_url, image_url, extra_metadata, image_filename = self.queue.pop()
+        return self.save_locally(origin_url, image_url, extra_metadata=extra_metadata, image_filename=image_filename)
 
     def fill_queue(self):
         logger.info(lambda: "Filling Bing queue from " + self.location)
@@ -53,21 +54,23 @@ class BingDownloader(Downloader.Downloader):
         s = Util.fetch_json(BingDownloader.BING_JSON_URL)
         for item in s['images']:
             try:
-                image_url = 'https://www.bing.com' + item['url']
-                filename = item['url'].split('/')[-1]
-                name = filename[0:filename.find('_EN')]
-                src_url = 'https://www.bing.com/gallery/#images/%s' % name
-                try:
-                    date = datetime.strptime(item['startdate'], '%Y%m%d').strftime('%Y-%m-%d')
-                except:
-                    date = item['startdate']
-                extra_metadata = {
-                    'sourceType': 'bing',
-                    'sfwRating': 100,
-                    'headline': 'Bing Photo of the Day, %s' % date,
-                    'description': item['copyright'],
-                }
-                self.queue.append((src_url, image_url, extra_metadata))
+                if item['wp'] == True:
+                    image_url = src_url = 'https://www.bing.com' + item['url']
+                    image_filename = parse_qs(urlparse(image_url).query)['id'][0]
+                    try:
+                        date = datetime.strptime(item['startdate'],
+                                                 '%Y%m%d').strftime('%Y-%m-%d')
+                    except:
+                        date = item['startdate']
+                    extra_metadata = {
+                        'sourceType': 'bing',
+                        'sfwRating': 100,
+                        'headline': 'Bing Photo of the Day, %s' % date,
+                        'description': item['copyright'],
+                    }
+                    self.queue.append((src_url, image_url, extra_metadata, image_filename))
+                else:
+                    logger.info(lambda: "Bing image wp: %s" % item['wp'])
             except:
                 logger.exception(lambda: "Could not process an item in the Bing json result")
 

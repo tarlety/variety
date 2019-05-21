@@ -56,18 +56,23 @@ class Downloader(object):
         valid_chars = "_%s%s" % (string.ascii_letters, string.digits)
         return ''.join(c if c in valid_chars else '_' for c in url)
 
-    def get_local_filename(self, url):
-        return os.path.join(self.target_folder, Util.get_local_name(url))
+    def get_local_filename(self, url=None, image_filename=None):
+        if url:
+            return os.path.join(self.target_folder, Util.get_local_name(url))
+        if image_filename:
+            return os.path.join(self.target_folder, image_filename)
+        # default local filename
+        return os.path.join(self.target_folder, "wallpaper.jpg")
 
     def is_in_downloaded(self, url):
-        return os.path.exists(self.get_local_filename(url))
+        return os.path.exists(self.get_local_filename(url=url))
 
     def is_in_favorites(self, url):
         return self.parent and os.path.exists(os.path.join(self.parent.options.favorites_folder, Util.get_local_name(url)))
 
     def save_locally(self, origin_url, image_url,
                      source_type=None, source_location=None, source_name=None,
-                     force_download=False, extra_metadata={}, local_filename=None):
+                     force_download=False, extra_metadata={}, local_filename=None, image_filename=None):
         if not source_type:
             source_type = self.source_type
         if not source_name:
@@ -91,7 +96,10 @@ class Downloader(object):
             image_url = origin_url.split('//')[0] + image_url
 
         if not local_filename:
-            local_filename = self.get_local_filename(image_url)
+            if image_filename:
+                local_filename = self.get_local_filename(image_filename=image_filename)
+            elif image_url:
+                local_filename = self.get_local_filename(url=image_url)
         logger.info(lambda: "Origin URL: " + origin_url)
         logger.info(lambda: "Image URL: " + image_url)
         logger.info(lambda: "Local name: " + local_filename)
@@ -158,4 +166,3 @@ class Downloader(object):
             logger.exception(lambda: "Bad or missing min_fill_queue_interval")
 
         return min_download_interval, min_fill_queue_interval
-
