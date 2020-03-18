@@ -123,7 +123,16 @@ if [ "${KDE_FULL_SESSION}" == "true" ]; then
     # Plasma 5.7 introduced a new feature to set the wallpaper via a qdbus script:
     # https://github.com/KDE/plasma-workspace/commit/903cbfd7e267a4812a6ec222eb7e1b5dd775686f
     if [[ -n "${KDE_SESSION_VERSION}" && "${KDE_SESSION_VERSION}" == '5' ]]; then
-        qdbus org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "
+
+        # Try to find the Qt 5 version of qdbus. For systems using qtchooser, the binary name is 'qdbus'
+        # and the Qt version can be selected via the QT_SELECT environment variable.
+        if command -v qdbus-qt5 &>/dev/null; then
+            qdbus_command=qdbus-qt5
+        else
+            qdbus_command=qdbus
+        fi
+
+        QT_SELECT=5 $qdbus_command org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "
         var allDesktops = desktops();
         for (i=0; i < allDesktops.length; i++) {
             d = allDesktops[i];
@@ -162,6 +171,13 @@ if [ "$(gsettings get org.gnome.desktop.background picture-options)" == "'none'"
     gsettings set org.gnome.desktop.background picture-options 'zoom'
 fi
 
+# GNOME Screensaver / Lock screen - thanks to George C. de Araujo for the patch
+gsettings set org.gnome.desktop.screensaver picture-uri "file://$WP" 2> /dev/null
+if [ "$(gsettings get org.gnome.desktop.screensaver picture-options)" == "'none'" ]; then
+    gsettings set org.gnome.desktop.screensaver picture-options 'zoom'
+fi
+
+
 # Deepin
 if [ "$(gsettings list-schemas | grep -c com.deepin.wrap.gnome.desktop.background)" -ge 1 ]; then
     gsettings set com.deepin.wrap.gnome.desktop.background picture-uri "file://$WP"
@@ -191,11 +207,13 @@ if [ "$XDG_CURRENT_DESKTOP" == "LXQt" ]; then
     pcmanfm-qt --set-wallpaper "$WP" 2> /dev/null
 fi
 
-# i3, openbox, dwm: use either feh or nitrogen
-if [[ "$XDG_CURRENT_DESKTOP" == "i3"* ]] || [[ "$XDG_SESSION_DESKTOP" == "i3"* ]] ||
-        [[ "$DESKTOP_SESSION" == "openbox" ]] || [[ "$XDG_SESSION_DESKTOP" == *"dwm"* ]] ||
-        [[ "$XDG_CURRENT_DESKTOP" == *"dwm"* || "$DESKTOP_SESSION" == "bspwm" ]]; then
-    if command -v "feh" >/dev/null 2>&1; then
+# For simple WMs, use either feh or nitrogen
+# Implementation note: this uses spaces around list items to enforce matching whole words.
+# This also means that an empty variable won't cause false positives, since it expands to "  "
+SIMPLE_WMS=("bspwm" "dwm" "herbstluftwm" "i3" "i3-with-shmlog" "jwm" "openbox" "qtile" "xmonad")
+if [[ " ${SIMPLE_WMS[*]} " = *" $XDG_CURRENT_DESKTOP "* || " ${SIMPLE_WMS[*]} " = *" $XDG_SESSION_DESKTOP "* ||
+      " ${SIMPLE_WMS[*]} " = *" $DESKTOP_SESSION "* ]]; then
+	if command -v "feh" >/dev/null 2>&1; then
         feh --bg-fill "$WP" 2> /dev/null
     elif command -v "nitrogen" >/dev/null 2>&1; then
         nitrogen --set-zoom-fill --save "$WP" 2> /dev/null
@@ -220,9 +238,6 @@ gsettings set org.cinnamon.desktop.background picture-uri "file://$WP" 2> /dev/n
 if [ "$(gsettings get org.cinnamon.desktop.background picture-options)" == "'none'" ]; then
 	gsettings set org.cinnamon.desktop.background picture-options 'zoom'
 fi
-
-# GNOME Screensaver / Lock screen - thanks to George C. de Araujo for the patch
-gsettings set org.gnome.desktop.screensaver picture-uri "file://$WP" 2> /dev/null
 
 # Awesome Window Manager
 # Be sure to start variety when you start awesome, such as by adding it to ~/.xinitrc
